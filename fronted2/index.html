@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Departments & Products</title>
+    <!-- Link to external CSS file -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="flex flex-col items-center p-4 min-h-screen bg-gray-100">
+    <h1 class="text-4xl font-extrabold text-indigo-700 mb-8">E-commerce Departments</h1>
+
+    <div id="app-container" class="container">
+        <div id="loading-indicator" class="hidden flex justify-center items-center py-8">
+            <div class="loading-spinner"></div>
+            <p class="ml-3 text-gray-600">Loading...</p>
+        </div>
+        <div id="error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative" role="alert">
+            <strong class="font-bold">Error!</strong>
+            <span class="block sm:inline" id="error-text"></span>
+        </div>
+        <div id="content">
+            <!-- Content will be loaded here by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Link to external JavaScript file -->
+    <script src="script.js"></script>
+</body>
+</html>
