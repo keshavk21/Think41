@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Products App</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <button class="back-btn" onclick="showProductsList()">← Back to Products</button>
+            <h1>Products Store</h1>
+            <p>Browse our amazing collection of products</p>
+        </header>
+
+        <main class="main-content">
+            <!-- Products List View -->
+            <div id="products-list-view">
+                <div id="loading" class="loading">
+                    <div class="spinner"></div>
+                </div>
+                
+                <div id="products-container" class="products-grid" style="display: none;"></div>
+                
+                <div id="pagination" class="pagination" style="display: none;">
+                    <button id="prev-btn" onclick="changePage(-1)">Previous</button>
+                    <div id="page-info" class="page-info"></div>
+                    <button id="next-btn" onclick="changePage(1)">Next</button>
+                </div>
+                
+                <div id="error-container"></div>
+            </div>
+
+            <!-- Product Detail View -->
+            <div id="product-detail-view" class="product-detail">
+                <div id="product-detail-content"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
