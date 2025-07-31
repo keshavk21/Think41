@@ -26,7 +26,9 @@ class Product(BaseModel):
     name: Optional[str] = None
     brand: Optional[str] = None
     retail_price: Optional[float] = None
-    department: Optional[str] = None
+    # Corrected: 'department' should be a string (the department name)
+    # as it's likely stored as VARCHAR in the 'products' table.
+    department: Optional[str] 
     sku: Optional[str] = None
     distribution_center_id: Optional[int] = None
 
@@ -47,10 +49,25 @@ class ErrorResponse(BaseModel):
     success: bool
     error: str
 
+class Department(BaseModel):
+    id: int
+    name: str
+    product_count: int
+
+class DepartmentList(BaseModel):
+    departments: List[Department]
+
+# Note: This Pydantic model is not directly used for the return type of
+# /api/departments/{dept_id}/products if you only return IDs.
+# It's kept for consistency with other parts of the application.
+class DepartmentProducts(BaseModel):
+    department: str
+    products: List[Product]
+
 # Database configuration
 DATABASE_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
-    'database': os.getenv('DB_NAME', 'your_database'),
+    'database': os.getenv('DB_NAME', 'your_database'), # Ensure this matches your actual DB name
     'user': os.getenv('DB_USER', 'your_username'),
     'password': os.getenv('DB_PASSWORD', 'your_password'),
     'port': os.getenv('DB_PORT', '5432')
@@ -199,11 +216,13 @@ def get_products_paginated(limit: int, offset: int):
     try:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                # Modified to join with departments to get the department name
                 query = """
-                    SELECT id, cost, category, name, brand, retail_price, 
-                           department, sku, distribution_center_id
-                    FROM products 
-                    ORDER BY id ASC 
+                    SELECT p.id, p.cost, p.category, p.name, p.brand, p.retail_price, 
+                           d.department_name as department, p.sku, p.distribution_center_id
+                    FROM products p
+                    LEFT JOIN departments d ON p.department = d.id  -- Assuming p.department in products table is the department ID
+                    ORDER BY p.id ASC 
                     LIMIT %s OFFSET %s
                 """
                 cursor.execute(query, (limit, offset))
@@ -220,7 +239,14 @@ def get_product_by_id(product_id: int):
     try:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                query = "SELECT * FROM products WHERE id = %s"
+                # Modified to join with departments to get the department name
+                query = """
+                    SELECT p.id, p.cost, p.category, p.name, p.brand, p.retail_price, 
+                           d.department_name as department, p.sku, p.distribution_center_id
+                    FROM products p
+                    LEFT JOIN departments d ON p.department = d.id -- Assuming p.department in products table is the department ID
+                    WHERE p.id = %s
+                """
                 cursor.execute(query, (product_id,))
                 return cursor.fetchone()
     except psycopg2.Error as e:
@@ -228,6 +254,73 @@ def get_product_by_id(product_id: int):
         raise
     except Exception as e:
         logger.error(f"Unexpected error getting product by ID {product_id}: {e}")
+        raise
+
+def get_all_departments():
+    """
+    Get all departments including their pre-calculated product count.
+    This now directly selects from the 'departments' table.
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                query = """
+                    SELECT id, department_name as name, product_count
+                    FROM departments
+                    ORDER BY id
+                """
+                cursor.execute(query)
+                return cursor.fetchall()
+    except psycopg2.Error as e:
+        logger.error(f"Database error getting departments: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error getting departments: {e}")
+        raise
+
+def get_department_by_id(dept_id: int):
+    """
+    Get a specific department by ID, including its pre-calculated product count.
+    This now directly selects from the 'departments' table.
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                query = """
+                    SELECT id, department_name as name, product_count
+                    FROM departments
+                    WHERE id = %s
+                """
+                cursor.execute(query, (dept_id,))
+                return cursor.fetchone()
+    except psycopg2.Error as e:
+        logger.error(f"Database error getting department {dept_id}: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error getting department {dept_id}: {e}")
+        raise
+
+def get_products_by_department(dept_id: int):
+    """Get all products in a department"""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                query = """
+                    SELECT p.id, p.cost, p.category, p.name, p.brand, p.retail_price,
+                           d.department_name as department, -- Select department name from departments table
+                           p.sku, p.distribution_center_id
+                    FROM products p
+                    JOIN departments d ON p.department = d.id -- Join on department ID
+                    WHERE d.id = %s
+                    ORDER BY p.id
+                """
+                cursor.execute(query, (dept_id,))
+                return cursor.fetchall()
+    except psycopg2.Error as e:
+        logger.error(f"Database error getting products for department {dept_id}: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error getting products for department {dept_id}: {e}")
         raise
 
 @app.get("/", response_model=dict)
@@ -440,6 +533,61 @@ async def get_product(product_id: int):
                 "error": "An unexpected error occurred."
             }
         )
+
+@app.get("/api/departments")
+async def get_departments():
+    """Get all departments with product count"""
+    try:
+        departments = get_all_departments()
+        return {"departments": [dict(dept) for dept in departments]}
+    except Exception as e:
+        logger.error(f"Error fetching departments: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching departments")
+
+@app.get("/api/departments/{dept_id}")
+async def get_department(dept_id: int):
+    """Get specific department details"""
+    try:
+        department = get_department_by_id(dept_id)
+        if not department:
+            raise HTTPException(status_code=404, detail="Department not found")
+        return dict(department)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching department {dept_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching department")
+
+@app.get("/api/departments/{dept_id}/products")
+async def get_department_products(dept_id: int):
+    """Get all products in a department"""
+    try:
+        department = get_department_by_id(dept_id)
+        if not department:
+            raise HTTPException(status_code=404, detail="Department not found")
+        
+        products = get_products_by_department(dept_id)
+        
+        # Convert products to list of dictionaries (full details)
+        products_list = []
+        for product in products:
+            product_dict = dict(product)
+            # Convert datetime objects to strings if they exist
+            if product_dict.get('created_at'):
+                product_dict['created_at'] = str(product_dict['created_at'])
+            if product_dict.get('updated_at'):
+                product_dict['updated_at'] = str(product_dict['updated_at'])
+            products_list.append(product_dict)
+
+        return {
+            "department": department['name'], # Return department NAME
+            "products": products_list         # Return list of FULL product objects
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching products for department {dept_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching department products")
 
 @app.exception_handler(422)
 async def validation_exception_handler(request, exc):
